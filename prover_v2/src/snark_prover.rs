@@ -27,14 +27,16 @@ impl SnarkProver {
         }
     }
     pub fn prove(&self, ctx: &SnarkContext) -> anyhow::Result<(bool, Vec<u8>)> {
-        let reduced_proof = if ctx.from_input {
-            let receipt: (
-                ZKMReduceProof<KoalaBearPoseidon2>,
-                StarkVerifyingKey<KoalaBearPoseidon2>,
-            ) = bincode::deserialize(&ctx.agg_receipt).map_err(|e| anyhow::anyhow!(e))?;
-
-            receipt.0
-        } else {
+        let reduced_proof =
+        //     if ctx.from_input {
+        //     let receipt: (
+        //         ZKMReduceProof<KoalaBearPoseidon2>,
+        //         StarkVerifyingKey<KoalaBearPoseidon2>,
+        //     ) = bincode::deserialize(&ctx.agg_receipt).map_err(|e| anyhow::anyhow!(e))?;
+        // 
+        //     receipt.0
+        // } else 
+        {
             let json_str = String::from_utf8_lossy(&ctx.agg_receipt).to_string();
             let proof: ZKMProof =
                 serde_json::from_str(&json_str).expect("could not deserialize proof");

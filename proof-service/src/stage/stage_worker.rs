@@ -110,6 +110,25 @@ async fn run_stage_task(
                                 }
                             }
                         }
+                        Step::Agg => {
+                            let agg_task = stage.get_agg_task();
+                            tracing::info!("get_agg_task: {:?}", agg_task.is_some());
+                            if let Some(agg_task) = agg_task {
+                                tracing::info!("chosen agg task id info: {:?}", agg_task.task_id);
+                                let tx = tx.clone();
+                                let tls_config = tls_config.clone();
+                                tokio::spawn(async move {
+                                    let response =
+                                        prover_client::aggregate(agg_task, tls_config).await;
+                                    if let Some(agg_task) = response {
+                                        let _ = tx.send(Task::Agg(agg_task)).await;
+                                    }
+                                });
+                            } else {
+                                tracing::info!("no agg task found, waiting for next round");
+                            }
+                        }
+
                         Step::Snark => {
                             let snark_task = stage.get_snark_task();
                             if let Some(snark_task) = snark_task {

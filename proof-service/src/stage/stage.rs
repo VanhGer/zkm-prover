@@ -1,4 +1,4 @@
-use crate::proto::includes::v1::Step;
+use crate::proto::includes::v1::{AggregateInput, Step};
 #[cfg(feature = "prover_v2")]
 use crate::stage::safe_read;
 use crate::stage::tasks::{
@@ -176,8 +176,35 @@ impl Stage {
             }
             Step::Agg => {
                 assert_eq!(self.generate_task.from_step, Step::Agg);
-                self.gen_snark_task();
-                self.step = Step::Snark;
+                if !self.is_tasks_gen_done {
+                    self.gen_agg_tasks_from_input();
+                    self.is_tasks_gen_done = true;
+                    // clear agg tasks' child task
+                    let successful_task_ids = self
+                        .agg_tasks
+                        .iter()
+                        .filter(|t| t.state == TASK_STATE_SUCCESS)
+                        .map(|t| t.task_id.clone())
+                        .collect::<Vec<_>>();
+                    for id in successful_task_ids {
+                        self.clear_agg_child_task(&id);
+                    }
+                    tracing::info!("agg task: {:?}", self.agg_tasks.len());
+                }
+                // update step
+                if self.agg_tasks.iter()
+                    .all(|task| task.state == TASK_STATE_SUCCESS)
+                {
+                    
+                    if self.generate_task.target_step == Step::Agg {
+                        self.step = Step::End;
+                    } else {
+                        self.gen_snark_task();
+                        self.step = Step::Snark;
+                    }
+                } else {
+                    tracing::info!("havent done yet");
+                }
             }
             Step::Snark => {
                 if self.snark_task.state == TASK_STATE_SUCCESS {
@@ -510,13 +537,73 @@ impl Stage {
         }
     }
 
+    #[cfg(feature = "prover_v2")]
+    pub fn gen_agg_tasks_from_input(&mut self) {
+        // The batch size for reducing two layers of recursion.
+        let batch_size = 2;
+
+        let mut agg_index = 0;
+        let mut result = Vec::new();
+
+        // read from receipt_inputs_path
+        let receipt_datas = std::fs::read(&self.generate_task.receipt_inputs_path).unwrap();
+        let receipts = bincode::deserialize::<Vec<Vec<u8>>>(&receipt_datas).unwrap();
+        
+        // create completed agg tasks from the receipts
+        for receipt in receipts {
+            let task_id = uuid::Uuid::new_v4().to_string();
+            let input = AggregateInput {
+                receipt_input: receipt.clone(),
+                computed_request_id: task_id.clone(),
+                is_agg: true,
+            };
+            let agg_task = AggTask {
+                task_id: uuid::Uuid::new_v4().to_string(),
+                block_no: self.generate_task.block_no,
+                state: TASK_STATE_SUCCESS,
+                seg_size: self.generate_task.seg_size,
+                proof_id: self.generate_task.proof_id.clone(),
+                inputs: vec![input],
+                agg_index,
+                ..Default::default()
+            };
+            result.push(agg_task);
+            agg_index += 1;
+        }
+        
+        // process the first layer
+        self.agg_tasks.append(&mut result.clone());
+
+        let mut current_length = result.len();
+        while current_length > 1 {
+            let mut new_result = Vec::new();
+            for batch in result.chunks(batch_size) {
+                let agg_task = AggTask::init_from_agg_tasks(batch, agg_index, false);
+                self.agg_tasks.push(agg_task.clone());
+                new_result.push(agg_task);
+                agg_index += 1;
+            }
+
+            result = new_result;
+            current_length = result.len();
+        }
+
+        if let Some(last) = self.agg_tasks.last_mut() {
+            last.is_final = true;
+        }
+        tracing::info!("number of agg tasks: {}", self.agg_tasks.len());
+        tracing::info!("last task id: {}", self.agg_tasks.last().unwrap().task_id);
+    }
+
     pub fn get_agg_task(&mut self) -> Option<AggTask> {
         let mut result: Option<AggTask> = None;
+        // tracing::info!("get_agg_task: {:?}", self.agg_tasks.len());
         for agg_task in &mut self.agg_tasks {
             if agg_task.childs.iter().any(|c| c.is_some()) {
                 tracing::debug!("Skipping agg_task: childs: {:?}", agg_task.childs);
                 continue;
             }
+            // tracing::info!("agg task state: {:?}", agg_task.state);
             if agg_task.state == TASK_STATE_UNPROCESSED || agg_task.state == TASK_STATE_FAILED {
                 agg_task.state = TASK_STATE_PROCESSING;
                 agg_task.trace.start_ts = get_timestamp();
@@ -548,6 +635,7 @@ impl Stage {
     }
 
     pub fn on_agg_task(&mut self, agg_task: &mut AggTask) {
+        // tracing::info!("done on_agg_task: {:?}", agg_task.task_id);
         for item_task in &mut self.agg_tasks {
             if item_task.task_id == agg_task.task_id && item_task.state == TASK_STATE_PROCESSING {
                 on_task!(agg_task, item_task, self);

@@ -39,6 +39,7 @@ impl AggProver {
                 ZKMCircuitWitness::Deferred(deferred_witness)
             }
         } else {
+            // tracing::info!("ctx: {:?}", ctx.is_complete);
             let reduced_proofs: Vec<ZKMReduceProof<_>> = ctx
                 .proofs
                 .iter()
@@ -63,7 +64,7 @@ impl AggProver {
         };
 
         let reduced_proof = self.compress(&prover, input, network_prove.opts.recursion_opts)?;
-
+        // tracing::info!("compressed done:");
         Ok(serde_json::to_string(&reduced_proof)?.into_bytes())
     }
 
