@@ -3,7 +3,12 @@ use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 use crate::proto::includes::v1::ProverVersion;
-use crate::proto::prover_service::v1::{get_status_response, prover_service_server::ProverService, AggregateRequest, AggregateResponse, GetStatusRequest, GetStatusResponse, GetTaskResultRequest, GetTaskResultResponse, ProveRequest, ProveResponse, Result, ResultCode, SingleNodeRequest, SingleNodeResponse, SnarkProofRequest, SnarkProofResponse, SplitElfRequest, SplitElfResponse};
+use crate::proto::prover_service::v1::{
+    get_status_response, prover_service_server::ProverService, AggregateRequest, AggregateResponse,
+    GetStatusRequest, GetStatusResponse, GetTaskResultRequest, GetTaskResultResponse, ProveRequest,
+    ProveResponse, Result, ResultCode, SingleNodeRequest, SingleNodeResponse, SnarkProofRequest,
+    SnarkProofResponse, SplitElfRequest, SplitElfResponse,
+};
 use crate::{config, metrics};
 #[cfg(feature = "prover")]
 use prover::{
@@ -11,12 +16,12 @@ use prover::{
     executor::SplitContext,
     pipeline::Pipeline,
 };
+use prover_v2::contexts::SingleNodeContext;
 #[cfg(feature = "prover_v2")]
 use prover_v2::{
     contexts::{AggContext, ProveContext, SnarkContext, SplitContext},
     pipeline::Pipeline,
 };
-use prover_v2::contexts::SingleNodeContext;
 
 async fn run_back_task<
     T: Send + 'static,
@@ -398,16 +403,11 @@ impl ProverService for ProverServiceSVC {
             );
             let start = Instant::now();
             let single_node_context = SingleNodeContext {
-                base_dir: request.get_ref().base_dir.to_string(),
                 program_id: request.get_ref().program_id.to_string(),
                 elf_path: request.get_ref().elf_path.to_string(),
-                block_no: request.get_ref().block_no,
-                public_input_path: request.get_ref().public_input_path.to_string(),
                 private_input_path: request.get_ref().private_input_path.to_string(),
-                args: request.get_ref().args.to_string(),
                 receipt_inputs_path: request.get_ref().receipt_inputs_path.to_string(),
             };
-    
             let pipeline = self.pipeline.clone();
             let single_node_func = move || {
                 // todo: use try_lock?
@@ -415,7 +415,6 @@ impl ProverService for ProverServiceSVC {
                     tracing::error!("Mutex poisoned, recovering");
                     e.into_inner()
                 });
-    
                 guard.prove_single_node(&single_node_context)
             };
             let result = run_back_task(single_node_func).await;
@@ -423,9 +422,7 @@ impl ProverService for ProverServiceSVC {
                 proof_id: request.get_ref().proof_id.clone(),
                 computed_request_id: request.get_ref().computed_request_id.clone(),
                 agg_receipt: match &result {
-                    Ok((_, x)) => {
-                        x.clone()
-                    },
+                    Ok((_, x)) => x.clone(),
                     _ => vec![],
                 },
                 ..Default::default()
