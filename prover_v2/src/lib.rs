@@ -2,6 +2,7 @@ use lru::LruCache;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use zkm_core_executor::{ExecutionRecord, ExecutionState, Program, ZKMContextBuilder};
@@ -10,6 +11,7 @@ use zkm_prover::{CoreSC, OuterSC, ZKMProver};
 use zkm_stark::{PublicValues, StarkProvingKey, StarkVerifyingKey, ZKMProverOpts};
 
 pub use zkm_sdk;
+use zkm_sdk::ProverClient;
 
 pub mod agg_prover;
 pub mod contexts;
@@ -121,4 +123,8 @@ lazy_static::lazy_static! {
         Mutex::new(StarkKeyCache::new(DEFAULT_CACHE_SIZE));
         pub static ref PROGRAM_CACHE: Mutex<ProgramCache> =
         Mutex::new(ProgramCache::new(DEFAULT_CACHE_SIZE));
+}
+
+lazy_static::lazy_static! {
+    pub static ref CLIENT_CACHE: Arc<ProverClient> = Arc::new(ProverClient::cpu());
 }
