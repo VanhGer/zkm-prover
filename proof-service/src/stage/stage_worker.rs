@@ -99,7 +99,6 @@ async fn run_stage_task(
                             .await;
                     }
                 }
-                
                 let (tx, mut rx) = tokio::sync::mpsc::channel(128);
                 stage.dispatch();
                 let mut interval = time::interval(time::Duration::from_millis(200));

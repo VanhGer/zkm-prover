@@ -82,8 +82,10 @@ impl Pipeline {
             }
         }
     }
-    
-    pub fn prove_single_node(&self, single_node_context: &SingleNodeContext) -> Result<(bool, Vec<u8>), String> {
+    pub fn prove_single_node(
+        &self,
+        single_node_context: &SingleNodeContext,
+    ) -> Result<(bool, Vec<u8>), String> {
         match self.mutex.try_lock() {
             Ok(_) => self
                 .single_node_prover
