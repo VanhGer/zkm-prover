@@ -16,10 +16,9 @@ use prover::{
     executor::SplitContext,
     pipeline::Pipeline,
 };
-use prover_v2::contexts::SingleNodeContext;
 #[cfg(feature = "prover_v2")]
 use prover_v2::{
-    contexts::{AggContext, ProveContext, SnarkContext, SplitContext},
+    contexts::{AggContext, ProveContext, SnarkContext, SplitContext, SingleNodeContext},
     pipeline::Pipeline,
 };
 
@@ -390,6 +389,7 @@ impl ProverService for ProverServiceSVC {
         .await
     }
 
+    #[cfg(feature = "prover_v2")]
     async fn single_node(
         &self,
         request: Request<SingleNodeRequest>,
@@ -441,5 +441,13 @@ impl ProverService for ProverServiceSVC {
             Ok(Response::new(response))
         })
         .await
+    }
+
+    #[cfg(feature = "prover")]
+    async fn single_node(
+        &self,
+        _request: Request<SingleNodeRequest>,
+    ) -> tonic::Result<Response<SingleNodeResponse>, Status> {
+        Err(Status::unimplemented("single_node is not supported in zkm feature"))
     }
 }
