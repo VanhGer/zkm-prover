@@ -66,7 +66,7 @@ async fn run_stage_task(
                 );
                 // single node handler.
                 if generate_context.single_node {
-                    if task.step != 0 {
+                    if task.step != Step::Init as i32 {
                         tracing::debug!("single node task, but it has already been processed");
                         return;
                     }
